@@ -1,0 +1,17 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Users\Sr_NFKD\.espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe -DESP_PLATFORM=1 -DIDF_TARGET=esp32c3 -DCMAKE_MAKE_PROGRAM=C:/Users/Sr_NFKD/.espressif/tools/ninja/1.12.1/ninja.exe -DCCACHE_ENABLE=0 A:\Espressif-IDF\project\C3FN4_3.98_A0
+-- Found Git: C:/Program Files/Git/cmd/git.exe (found version "2.54.0.windows.1")
+-- git rev-parse returned 'fatal: detected dubious ownership in repository at 'A:/Espressif-IDF/v5.5.4/esp-idf'
+'A:/Espressif-IDF/v5.5.4/esp-idf' is owned by:
+	BUILTIN/Administrators (S-1-5-32-544)
+but the current user is:
+	SR-NFKD/CodexSandboxOffline (S-1-5-21-455162596-3817045262-3823650958-1004)
+To add an exception for this directory, call:
+
+	git config --global --add safe.directory A:/Espressif-IDF/v5.5.4/esp-idf'
+-- Minimal build - ON
+-- The C compiler identification is unknown
+-- The CXX compiler identification is unknown
+-- The ASM compiler identification is unknown
+-- Found assembler: riscv32-esp-elf-gcc
+-- Warning: Did not find file Compiler/-ASM
+-- Configuring incomplete, errors occurred!
