@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>四色墨水屏</title>
+<style>
+:root{color-scheme:light;--paper:#f6f2e9;--ink:#24211d;--muted:#746e64;--line:#d8d0c2;--red:#9f2f2a;--yellow:#d0a51b}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 system-ui,sans-serif}
+main{width:min(1040px,calc(100% - 28px));margin:24px auto 42px}h1{font-size:clamp(24px,5vw,38px);margin:0 0 4px}.sub{color:var(--muted);margin:0 0 22px}
+.grid{display:grid;grid-template-columns:300px 1fr;gap:18px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 30px #594a3510}
+label{display:block;font-weight:700;margin:0 0 6px}.field{margin-bottom:16px}input[type=file],select,input[type=range]{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.check{display:flex;gap:9px;align-items:center;font-weight:600}.check input{width:18px;height:18px}
+button{width:100%;border:0;border-radius:11px;padding:12px 14px;font-weight:800;font-size:15px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+#process{background:var(--ink);color:#fff;margin-top:4px}#send{background:var(--red);color:#fff;margin-top:10px}
+.status{margin-top:14px;padding:10px 12px;border-radius:10px;background:#eee9df;color:var(--muted)}.status.busy{color:#7d5d00;background:#fff2bf}.status.ok{color:#29623d;background:#dff2e5}.status.err{color:#8a2522;background:#f8dfdc}
+.previewWrap{min-height:320px;display:grid;place-items:center;background:#ddd5c8;border-radius:12px;padding:12px;overflow:auto}
+canvas{display:block;max-width:100%;max-height:72vh;background:white;box-shadow:0 3px 14px #0002;image-rendering:auto;touch-action:none;cursor:grab}canvas.dragging{cursor:grabbing}.legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:12px;color:var(--muted)}.dot{display:inline-block;width:12px;height:12px;border:1px solid #777;border-radius:3px;margin-right:5px;vertical-align:-1px}
+footer{color:var(--muted);font-size:12px;margin-top:18px}@media(max-width:760px){.grid{grid-template-columns:1fr}.previewWrap{min-height:240px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>四色墨水屏</h1>
+  <p class="sub">上传图片，在浏览器中转换为 768 × 552 黑白红黄画面。</p>
+  <div class="grid">
+    <section class="card">
+      <div class="field"><label for="file">选择图片</label><input id="file" type="file" accept="image/*"></div>
+      <div class="field"><label for="orientation">显示方向</label><select id="orientation"><option value="landscape">横向 · 768 × 552</option><option value="portrait">竖向 · 552 × 768</option></select></div>
+      <div class="field"><label for="zoom">图片缩放：<span id="zoomValue">100%</span></label><input id="zoom" type="range" min="10" max="400" value="100" step="1"></div>
+      <div class="field"><label class="check"><input id="mirror" type="checkbox">水平镜像</label></div>
+      <div class="field"><label class="check"><input id="invert" type="checkbox">颜色反转</label></div>
+      <button id="process">处理并生成预览</button>
+      <button id="send" disabled>发送到墨水屏</button>
+      <div id="status" class="status">请选择图片；随后可缩放，并在预览区拖拽调整位置。</div>
+    </section>
+    <section class="card">
+      <div class="previewWrap"><canvas id="preview" width="768" height="552"></canvas></div>
+      <div class="legend">
+        <span><i class="dot" style="background:#000"></i>黑</span><span><i class="dot" style="background:#fff"></i>白</span>
+        <span><i class="dot" style="background:#f00"></i>红</span><span><i class="dot" style="background:#ff0"></i>黄</span>
+      </div>
+    </section>
+  </div>
+  <footer>图像量化基于 epdoptimize（Apache-2.0），使用 LAB 色彩匹配与 Floyd–Steinberg 抖动。</footer>
+</main>
+<script>
+window.optimizerReady=new Promise(resolve=>window.optimizerResolve=resolve);
+const $=id=>document.getElementById(id), file=$('file'), orientation=$('orientation'), zoom=$('zoom'), zoomValue=$('zoomValue'), mirror=$('mirror'), invert=$('invert');
+const processButton=$('process'), sendButton=$('send'), preview=$('preview'), status=$('status');
+const palette=[
+  {name:'black',color:'#181818',deviceColor:'#000000'},
+  {name:'white',color:'#d8d8d2',deviceColor:'#FFFFFF'},
+  {name:'red',color:'#841f1d',deviceColor:'#FF0000'},
+  {name:'yellow',color:'#c6ad25',deviceColor:'#FFFF00'}
+];
+let bitmap=null,frame=null,panX=0,panY=0,dragging=false,lastX=0,lastY=0,dragFrame=0;
+
+function message(text,type=''){status.textContent=text;status.className='status '+type}
+function canvas(width,height){const c=document.createElement('canvas');c.width=width;c.height=height;return c}
+function decodeImage(blob){
+  if('createImageBitmap' in window)return createImageBitmap(blob,{imageOrientation:'from-image'});
+  return new Promise((resolve,reject)=>{const img=new Image(),url=URL.createObjectURL(blob);img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(Error('浏览器无法解码图片'))};img.src=url});
+}
+function composeSource(effects=false){
+  const portrait=orientation.value==='portrait',w=portrait?552:768,h=portrait?768:552;
+  const source=canvas(w,h),ctx=source.getContext('2d',{willReadFrequently:effects});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  const scale=Math.min(w/bitmap.width,h/bitmap.height)*Number(zoom.value)/100;
+  const dw=Math.max(1,Math.round(bitmap.width*scale)),dh=Math.max(1,Math.round(bitmap.height*scale));
+  const dx=Math.round((w-dw)/2+panX),dy=Math.round((h-dh)/2+panY);
+  if(mirror.checked){ctx.save();ctx.translate(w,0);ctx.scale(-1,1);ctx.drawImage(bitmap,w-dx-dw,dy,dw,dh);ctx.restore()}
+  else ctx.drawImage(bitmap,dx,dy,dw,dh);
+  if(effects&&invert.checked){const data=ctx.getImageData(0,0,w,h);for(let i=0;i<data.data.length;i+=4){data.data[i]=255-data.data[i];data.data[i+1]=255-data.data[i+1];data.data[i+2]=255-data.data[i+2]}ctx.putImageData(data,0,0)}
+  return {source,portrait,w,h,dw,dh};
+}
+function showComposition(){
+  if(!bitmap)return;
+  const {source,w,h}=composeSource();preview.width=w;preview.height=h;preview.getContext('2d').drawImage(source,0,0);
+  frame=null;sendButton.disabled=true;message('可拖拽图片调整位置；确认后点击处理。','ok');
+}
+file.addEventListener('change',async()=>{
+  frame=null;sendButton.disabled=true;
+  if(bitmap&&bitmap.close)bitmap.close();bitmap=null;panX=0;panY=0;zoom.value=100;zoomValue.textContent='100%';
+  if(!file.files[0]){message('请选择一张图片。');return}
+  try{message('正在读取图片…','busy');bitmap=await decodeImage(file.files[0]);showComposition()}
+  catch(e){message('无法读取这张图片：'+e.message,'err')}
+});
+
+zoom.addEventListener('input',()=>{zoomValue.textContent=zoom.value+'%';showComposition()});
+orientation.addEventListener('change',()=>{panX=0;panY=0;showComposition()});
+mirror.addEventListener('change',showComposition);
+preview.addEventListener('pointerdown',e=>{if(!bitmap)return;dragging=true;lastX=e.clientX;lastY=e.clientY;preview.classList.add('dragging');preview.setPointerCapture(e.pointerId)});
+preview.addEventListener('pointermove',e=>{if(!dragging)return;const r=preview.getBoundingClientRect();panX+=(e.clientX-lastX)*preview.width/r.width;panY+=(e.clientY-lastY)*preview.height/r.height;lastX=e.clientX;lastY=e.clientY;if(!dragFrame)dragFrame=requestAnimationFrame(()=>{dragFrame=0;showComposition()})});
+function stopDrag(){dragging=false;preview.classList.remove('dragging')}
+preview.addEventListener('pointerup',stopDrag);preview.addEventListener('pointercancel',stopDrag);
+
+processButton.addEventListener('click',async()=>{
+  if(!file.files[0]){message('请先选择一张图片。','err');return}
+  processButton.disabled=true;sendButton.disabled=true;message('正在缩放和四色抖动…','busy');
+  await new Promise(resolve=>requestAnimationFrame(resolve));
+  try{
+    if(!bitmap)bitmap=await decodeImage(file.files[0]);
+    const {ditherCanvas,replaceColors}=await Promise.race([
+      window.optimizerReady,
+      new Promise((_,reject)=>setTimeout(()=>reject(Error('图像算法加载失败，请刷新网页重试')),10000))
+    ]);
+    const {source,portrait,w,h,dw,dh}=composeSource(true);
+    const dithered=canvas(w,h),device=canvas(w,h);
+    await ditherCanvas(source,dithered,{palette,colorMatching:'lab',ditheringType:'errorDiffusion',errorDiffusionMatrix:'floydSteinberg',serpentine:true});
+    replaceColors(dithered,device,palette);
+    preview.width=w;preview.height=h;preview.getContext('2d').drawImage(device,0,0);
+    frame=packFrame(device,portrait);sendButton.disabled=false;message(`预览完成，整张图片已按比例缩放（${dw} × ${dh}）。`,'ok');
+  }catch(e){message('处理失败：'+e.message,'err')}
+  finally{processButton.disabled=false}
+});
+
+function packFrame(device,portrait){
+  const w=device.width,pixels=device.getContext('2d').getImageData(0,0,device.width,device.height).data;
+  const out=new Uint8Array(768*552/4);let p=0,value=0;
+  for(let y=0;y<552;y++)for(let x=0;x<768;x++){
+    const lx=portrait?551-y:x,ly=portrait?x:y,i=(ly*w+lx)*4,r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+    const code=r<64&&g<64&&b<64?0:r>200&&g<80?2:r>200&&g>180&&b<80?3:1;
+    value=(value<<2)|code;if((p&3)===3)out[p>>2]=value;p++;
+  }
+  return out;
+}
+
+sendButton.addEventListener('click',async()=>{
+  if(!frame)return;sendButton.disabled=true;message('正在上传帧数据…','busy');
+  try{const response=await fetch('/api/frame',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:frame});if(!response.ok)throw Error(await response.text());message('上传完成，墨水屏正在刷新，请等待约 20 秒。','busy');poll()}
+  catch(e){message('发送失败：'+e.message,'err');sendButton.disabled=false}
+});
+
+async function poll(){try{const state=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());if(state.busy){setTimeout(poll,1500)}else{message('墨水屏刷新完成。','ok');sendButton.disabled=!frame}}catch{setTimeout(poll,2000)}}
+</script>
+<script type="module">
+import {ditherCanvas,replaceColors} from './epdoptimize.mjs';
+window.optimizerResolve({ditherCanvas,replaceColors});
+</script>
+</body>
+</html>
