@@ -6,7 +6,7 @@ static const char *TAG = "app";
 
 void app_main(void)
 {
-    #define APP_POWER_ON_CLEAR_WHITE_COUNT 2 /* 0: disable; 1: once; 2: twice; etc. */
+    #define APP_POWER_ON_CLEAR_WHITE_COUNT 0 /* 0: disable; 1: once; 2: twice; etc. */
 
     ESP_LOGI(TAG, "initializing display");
     ESP_ERROR_CHECK(bsp_display_init());
