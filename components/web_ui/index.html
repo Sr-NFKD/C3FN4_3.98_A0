@@ -120,7 +120,8 @@ function packFrame(device,portrait){
   const out=new Uint8Array(768*552/4);let p=0,value=0;
   for(let y=0;y<552;y++)for(let x=0;x<768;x++){
     const lx=portrait?551-y:x,ly=portrait?x:y,i=(ly*w+lx)*4,r=pixels[i],g=pixels[i+1],b=pixels[i+2];
-    const code=r<64&&g<64&&b<64?0:r>200&&g<80?2:r>200&&g>180&&b<80?3:1;
+    // Panel codes: 0=black, 1=white, 2=yellow, 3=red.
+    const code=r<64&&g<64&&b<64?0:r>200&&g<80?3:r>200&&g>180&&b<80?2:1;
     value=(value<<2)|code;if((p&3)===3)out[p>>2]=value;p++;
   }
   return out;
