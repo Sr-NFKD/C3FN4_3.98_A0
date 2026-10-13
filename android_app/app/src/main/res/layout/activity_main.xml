@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true" android:background="#F6F2E9">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="墨水屏 BLE" android:textSize="28sp" android:textStyle="bold" android:textColor="#24211D" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:text="把手机里的图片，留在四色墨水屏上。" android:textColor="#746E64" android:textSize="16sp" />
+        <TextView android:id="@+id/connection_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp" android:text="先开启蓝牙，再扫描附近的墨水屏。" android:textColor="#24211D"
+            android:textSize="16sp" android:accessibilityLiveRegion="polite" />
+        <Button android:id="@+id/scan" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="扫描墨水屏" />
+        <Spinner android:id="@+id/devices" android:layout_width="match_parent" android:layout_height="48dp"
+            android:contentDescription="选择附近的墨水屏" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/connect" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="连接" />
+            <Button android:id="@+id/disconnect" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="断开" />
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp"
+            android:text="图片预览" android:textSize="20sp" android:textStyle="bold" android:textColor="#24211D" />
+        <ImageView android:id="@+id/preview" android:layout_width="match_parent" android:layout_height="260dp"
+            android:layout_marginTop="12dp" android:background="#FFFFFF" android:scaleType="fitCenter" android:contentDescription="发送到墨水屏的四色图片预览" />
+        <TextView android:id="@+id/image_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="请选择一张图片，系统将保留完整画面。" android:textColor="#746E64" android:accessibilityLiveRegion="polite" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/choose" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="选择图片" />
+            <Button android:id="@+id/rotate" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="旋转 90°" />
+        </LinearLayout>
+        <CheckBox android:id="@+id/dither" android:layout_width="match_parent" android:layout_height="48dp" android:text="四色抖动（适合照片）" android:checked="true" android:textColor="#24211D" />
+        <CheckBox android:id="@+id/invert" android:layout_width="match_parent" android:layout_height="48dp" android:text="颜色反转" android:textColor="#24211D" />
+        <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent" android:layout_height="16dp" android:max="100" android:contentDescription="图片传输进度" />
+        <Button android:id="@+id/send" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="发送到墨水屏" />
+        <Button android:id="@+id/clear" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="清屏为白色" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:text="发送时请保持手机靠近设备。传输完成后仍需等待屏幕刷新；应用提示完成前，请勿关闭设备电源。"
+            android:textColor="#746E64" android:textSize="14sp" />
+    </LinearLayout>
+</ScrollView>
