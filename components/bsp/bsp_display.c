@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "bsp/bsp_board.h"
 #include "esp_attr.h"
@@ -23,7 +24,10 @@
 
 static const char *TAG = "bsp_display";
 static spi_device_handle_t s_spi;
-static uint8_t s_frame[EPD_FRAME_BYTES];
+/* Legacy web upload buffer is allocated only if that API is used. */
+static uint8_t *s_frame;
+static uint8_t s_strip[16 * EPD_WIDTH / 4];
+static int s_strip_y;
 DMA_ATTR static uint8_t s_tx_buffer[EPD_TX_BYTES];
 
 static void epd_write(bool data_mode, const uint8_t *bytes, size_t size)
@@ -89,7 +93,7 @@ static esp_err_t epd_init_controller(void)
     return epd_wait_idle(EPD_READY_TIMEOUT_US);
 }
 
-static esp_err_t epd_send_frame(const uint8_t *frame)
+static esp_err_t epd_send_frame(const uint8_t *frame, bsp_display_render_fn render, void *ctx)
 {
     const size_t row_bytes = EPD_WIDTH / 4;
     epd_command(0x04);
@@ -97,12 +101,20 @@ static esp_err_t epd_send_frame(const uint8_t *frame)
     if (epd_wait_idle(EPD_READY_TIMEOUT_US) != ESP_OK) return ESP_ERR_TIMEOUT;
 
     for (uint16_t source_y = 0; source_y < EPD_HEIGHT; ++source_y) {
+        if (render && source_y % 16 == 0) {
+            s_strip_y = source_y;
+            bsp_display_strip_fill(1);
+            esp_err_t err = render(ctx, source_y);
+            if (err != ESP_OK) return err;
+            vTaskDelay(1);
+        }
         const uint16_t scan_y = EPD_HEIGHT - 1 - source_y;
         const uint16_t panel_y = scan_y < EPD_HEIGHT / 2
                                ? scan_y * 2 : 2 * (EPD_HEIGHT - scan_y) - 1;
         epd_set_window(panel_y, panel_y);
         epd_command(0x10);
-        const uint8_t *row = frame + source_y * row_bytes;
+        const uint8_t *row = render ? s_strip + (source_y % 16) * row_bytes
+                                    : frame + source_y * row_bytes;
         for (size_t i = 0; i < row_bytes; ++i) {
             const uint8_t src = row[row_bytes - 1 - i];
             s_tx_buffer[i] = ((src & 0x03) << 6) | ((src & 0x0c) << 2) |
@@ -149,30 +161,35 @@ esp_err_t bsp_display_clear_white(void)
     if (s_spi == NULL) return ESP_ERR_INVALID_STATE;
 
     /* Colour code 1 is white: four packed white pixels form 0x55. */
-    memset(s_frame, 0x55, sizeof(s_frame));
-    return bsp_display_refresh();
+    if (s_frame) memset(s_frame, 0x55, EPD_FRAME_BYTES);
+    return bsp_display_render(NULL, NULL);
 }
 
 size_t bsp_display_frame_size(void)
 {
-    return sizeof(s_frame);
+    return EPD_FRAME_BYTES;
 }
 
 esp_err_t bsp_display_frame_write(size_t offset, const void *data, size_t size)
 {
-    if (data == NULL || offset > sizeof(s_frame) || size > sizeof(s_frame) - offset) {
+    if (data == NULL || offset > EPD_FRAME_BYTES || size > EPD_FRAME_BYTES - offset) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_frame) {
+        s_frame = malloc(EPD_FRAME_BYTES);
+        if (!s_frame) return ESP_ERR_NO_MEM;
+        memset(s_frame, 0x55, EPD_FRAME_BYTES);
     }
     memcpy(s_frame + offset, data, size);
     return ESP_OK;
 }
 
-esp_err_t bsp_display_refresh(void)
+static esp_err_t display_refresh(const uint8_t *frame, bsp_display_render_fn render, void *ctx)
 {
     if (s_spi == NULL) return ESP_ERR_INVALID_STATE;
 
     if (epd_init_controller() != ESP_OK) return ESP_FAIL;
-    if (epd_send_frame(s_frame) != ESP_OK) return ESP_FAIL;
+    if (epd_send_frame(frame, render, ctx) != ESP_OK) return ESP_FAIL;
 
     epd_command(0x12);
     const uint8_t zero = 0;
@@ -185,4 +202,34 @@ esp_err_t bsp_display_refresh(void)
     epd_data(&zero, 1);
     vTaskDelay(1);
     return epd_wait_idle(EPD_READY_TIMEOUT_US);
+}
+
+esp_err_t bsp_display_refresh(void)
+{
+    if (!s_frame) return ESP_ERR_INVALID_STATE;
+    return display_refresh(s_frame, NULL, NULL);
+}
+
+void bsp_display_strip_fill(uint8_t color)
+{
+    memset(s_strip, (color & 3u) * 0x55u, sizeof(s_strip));
+}
+
+void bsp_display_strip_pixel(int x, int y, uint8_t color)
+{
+    if (x < 0 || x >= EPD_WIDTH || y < s_strip_y || y >= s_strip_y + 16 || y >= EPD_HEIGHT) return;
+    const size_t index = (y - s_strip_y) * (EPD_WIDTH / 4) + x / 4;
+    const unsigned shift = 6 - 2 * (x & 3);
+    s_strip[index] = (s_strip[index] & ~(3u << shift)) | ((color & 3u) << shift);
+}
+
+static esp_err_t white_strip(void *ctx, int y0)
+{
+    (void)ctx; (void)y0;
+    return ESP_OK;
+}
+
+esp_err_t bsp_display_render(bsp_display_render_fn render, void *ctx)
+{
+    return display_refresh(NULL, render ? render : white_strip, ctx);
 }

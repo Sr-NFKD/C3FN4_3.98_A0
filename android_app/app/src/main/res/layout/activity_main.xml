@@ -34,6 +34,8 @@
             android:layout_width="match_parent" android:layout_height="16dp" android:max="100" android:contentDescription="图片传输进度" />
         <Button android:id="@+id/send" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="发送到墨水屏" />
         <Button android:id="@+id/clear" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="清屏为白色" />
+        <Button android:id="@+id/update_firmware" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="选择固件并更新设备" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
             android:text="发送时请保持手机靠近设备。传输完成后仍需等待屏幕刷新；应用提示完成前，请勿关闭设备电源。"
             android:textColor="#746E64" android:textSize="14sp" />

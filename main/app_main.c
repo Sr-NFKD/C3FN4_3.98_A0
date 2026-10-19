@@ -1,6 +1,7 @@
 #include "bsp/bsp_display.h"
 #include "esp_log.h"
 #include "ble_epaper.h"
+#include "firmware_update.h"
 
 static const char *TAG = "app";
 
@@ -10,15 +11,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "initializing display");
     ESP_ERROR_CHECK(bsp_display_init());
-    for (int i = 0; i < APP_POWER_ON_CLEAR_WHITE_COUNT; ++i) {
-        ESP_LOGI(TAG, "clearing display to white on startup (%d/%d)",
-                 i + 1, APP_POWER_ON_CLEAR_WHITE_COUNT);
-        esp_err_t clear_err = bsp_display_clear_white();
-        if (clear_err != ESP_OK) {
-            ESP_LOGE(TAG, "startup clear failed: %s", esp_err_to_name(clear_err));
-            break;
-        }
-    }
-    ESP_ERROR_CHECK(ble_epaper_start());
-    ESP_LOGI(TAG, "ready: connect to C3FN4-EPAPER-BLE using the Android app");
+    ESP_ERROR_CHECK(ble_epaper_start(APP_POWER_ON_CLEAR_WHITE_COUNT));
+    firmware_update_confirm_boot();
+    ESP_LOGI(TAG, "ready: EPD-Calendar (upstream mini-program protocol)");
 }

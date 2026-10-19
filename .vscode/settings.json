@@ -33,6 +33,7 @@
     "--query-driver=**",
     "--compile-commands-dir=a:\\Espressif-IDF\\project\\C3FN4_3.98_A0_BLE/build_ble"
   ],
-  "idf.flashType": "JTAG",
-  "idf.portWin": "COM18"
+  "idf.flashType": "UART",
+  "idf.portWin": "COM18",
+  "idf.port": "COM29"
 }

@@ -39,6 +39,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -52,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter bluetooth;
     private BluetoothLeScanner scanner;
     private BleClient client;
-    private Button scan, connect, disconnect, choose, rotate, send, clear;
+    private Button scan, connect, disconnect, choose, rotate, send, clear, firmwareButton;
     private Spinner deviceList;
     private CheckBox dither, invert;
     private TextView connectionStatus, imageStatus;
@@ -73,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
                 if (bluetooth != null && bluetooth.isEnabled()) startScan();
                 else connectionStatus.setText("请开启手机蓝牙后重试");
             });
+    private final ActivityResultLauncher<String[]> pickFirmware = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(), uri -> { if (uri != null) loadFirmware(uri); });
     private final ActivityResultLauncher<String[]> pickImage = registerForActivityResult(
             new ActivityResultContracts.OpenDocument(), uri -> { if (uri != null) loadImage(uri); });
 
@@ -116,6 +119,9 @@ public class MainActivity extends AppCompatActivity {
         invert.setOnCheckedChangeListener((v, checked) -> processImage());
         send.setOnClickListener(v -> { if (frame != null && ready) client.send(frame); });
         clear.setOnClickListener(v -> client.clear());
+        firmwareButton = findViewById(R.id.update_firmware);
+        firmwareButton.setOnClickListener(v -> pickFirmware.launch(new String[] {"*/*"}));
+        connectionStatus.setText("未连接设备 · App 2.3");
         updateButtons();
     }
     private boolean hasPermissions() {
@@ -149,11 +155,14 @@ public class MainActivity extends AppCompatActivity {
                 if (!scanning || destroyed) return;
                 BluetoothDevice device = result.getDevice();
                 if (!devices.contains(device)) {
-                    devices.add(device); deviceLabels.add("C3FN4 墨水屏 · " + device.getAddress());
+                    devices.add(device); deviceLabels.add("EPD-Calendar · " + device.getAddress());
                     deviceAdapter.notifyDataSetChanged(); updateButtons();
                     connectionStatus.setText("找到 " + devices.size() + " 台墨水屏，选择后点击连接");
                 }
             });
+        }
+        @Override public void onBatchScanResults(List<ScanResult> results) {
+            for (ScanResult result : results) onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES, result);
         }
         @Override public void onScanFailed(int code) {
             handler.post(() -> { stopScan(); connectionStatus.setText("扫描失败（" + code + "），请稍后重试"); });
@@ -164,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
         if (scanning && scanner != null && hasPermissions()) {
             try { scanner.stopScan(scanCallback); } catch (IllegalStateException ignored) { }
         }
-        if (scanning && devices.isEmpty()) connectionStatus.setText("未找到墨水屏，请确认设备已烧录 BLE 固件并上电");
+        if (scanning && devices.isEmpty()) connectionStatus.setText("未找到墨水屏，请确认设备上电且未被其他手机连接");
         scanning = false; updateButtons();
     }
     private void updateButtons() {
@@ -174,9 +183,42 @@ public class MainActivity extends AppCompatActivity {
         disconnect.setEnabled(ready || busy);
         send.setEnabled(ready && frame != null && !processing);
         clear.setEnabled(ready && !processing);
+        firmwareButton.setEnabled(ready && !processing);
         choose.setEnabled(!busy && !processing);
         rotate.setEnabled(original != null && !busy && !processing);
         dither.setEnabled(!busy && !processing); invert.setEnabled(!busy && !processing);
+    }
+    private void loadFirmware(Uri uri) {
+        if (!ready || processing) return;
+        processing = true; updateButtons(); imageStatus.setText("正在读取固件…");
+        images.execute(() -> {
+            try (java.io.InputStream input = getContentResolver().openInputStream(uri);
+                 java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+                if (input == null) throw new java.io.IOException("无法打开文件");
+                byte[] chunk = new byte[8192]; int count;
+                while ((count = input.read(chunk)) != -1) {
+                    if (output.size() + count > EpaperProtocol.FIRMWARE_MAX_SIZE)
+                        throw new java.io.IOException("固件超过设备分区容量");
+                    output.write(chunk, 0, count);
+                }
+                byte[] bytes = output.toByteArray();
+                String project = EpaperProtocol.validateFirmware(bytes);
+                handler.post(() -> {
+                    if (destroyed) return;
+                    processing = false; updateButtons(); imageStatus.setText("已读取" + (project.endsWith("_BLE") ? "蓝牙版" : "Wi-Fi 版") + "固件 · " + bytes.length / 1024 + " KB");
+                    new androidx.appcompat.app.AlertDialog.Builder(this)
+                            .setTitle("更新设备固件")
+                            .setMessage("更新后请" + EpaperProtocol.firmwareConnection(project) + "。上传过程中请保持 App 在前台、手机靠近设备，并保持设备供电。")
+                            .setNegativeButton("取消", null)
+                            .setPositiveButton("开始更新", (dialog, which) -> client.updateFirmware(bytes)).show();
+                });
+            } catch (Exception | OutOfMemoryError e) {
+                handler.post(() -> {
+                    if (destroyed) return;
+                    processing = false; imageStatus.setText("无法使用该固件：" + e.getMessage()); updateButtons();
+                });
+            }
+        });
     }
     private void loadImage(Uri uri) {
         int generation = ++imageGeneration;
