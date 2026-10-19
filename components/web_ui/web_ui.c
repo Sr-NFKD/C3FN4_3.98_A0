@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+#include "firmware_update.h"
 
 #include "bsp/bsp_display.h"
 #include "esp_event.h"
@@ -100,6 +102,46 @@ static esp_err_t frame_handler(httpd_req_t *req)
     return httpd_resp_sendstr(req, "refresh started");
 }
 
+static esp_err_t firmware_handler(httpd_req_t *req)
+{
+    char crc_text[9];
+    if (httpd_req_get_hdr_value_len(req, "X-Firmware-CRC32") != 8 ||
+        httpd_req_get_hdr_value_str(req, "X-Firmware-CRC32", crc_text, sizeof(crc_text)) != ESP_OK ||
+        strspn(crc_text, "0123456789abcdefABCDEF") != 8 || req->content_len <= 0 ||
+        (uint32_t)req->content_len > firmware_update_capacity()) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid firmware size or CRC32 header");
+        return ESP_FAIL;
+    }
+    if (atomic_exchange(&s_display_busy, true)) {
+        httpd_resp_set_status(req, "409 Conflict");
+        return httpd_resp_sendstr(req, "Device busy; wait for display/upload to finish");
+    }
+    esp_err_t err = firmware_update_begin((uint32_t)req->content_len,
+                                          (uint32_t)strtoul(crc_text, NULL, 16));
+    uint8_t chunk[2048];
+    uint32_t offset = 0;
+    while (err == ESP_OK && offset < (uint32_t)req->content_len) {
+        size_t count = req->content_len - offset;
+        if (count > sizeof(chunk)) count = sizeof(chunk);
+        int received = httpd_req_recv(req, (char *)chunk, count);
+        if (received <= 0) { err = ESP_FAIL; break; }
+        err = firmware_update_write(offset, chunk, received);
+        offset += received;
+    }
+    if (err == ESP_OK) err = firmware_update_commit();
+    if (err != ESP_OK) {
+        firmware_update_abort(); atomic_store(&s_display_busy, false);
+        ESP_LOGE(TAG, "firmware upload failed: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                           "Firmware rejected or upload interrupted; current firmware retained");
+        return ESP_FAIL;
+    }
+    httpd_resp_set_type(req, "application/json");
+    bool restarting = firmware_update_schedule_restart() == ESP_OK;
+    return httpd_resp_sendstr(req, restarting ? "{\"ok\":true,\"reboot\":true}"
+                                             : "{\"ok\":true,\"reboot\":false}");
+}
+
 static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -114,6 +156,7 @@ static esp_err_t start_http_server(void)
         {.uri = "/epdoptimize.mjs", .method = HTTP_GET, .handler = module_handler},
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler},
         {.uri = "/api/frame", .method = HTTP_POST, .handler = frame_handler},
+        {.uri = "/api/firmware", .method = HTTP_POST, .handler = firmware_handler},
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); ++i) {
         ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &routes[i]), TAG,

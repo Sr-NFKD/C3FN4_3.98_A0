@@ -34,5 +34,5 @@
     "--compile-commands-dir=a:\\Espressif-IDF\\project\\C3FN4_3.98_A0\\build"
   ],
   "idf.flashType": "UART",
-  "idf.port": "COM27"
+  "idf.port": "COM29"
 }

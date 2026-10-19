@@ -42,6 +42,14 @@ footer{color:var(--muted);font-size:12px;margin-top:18px}@media(max-width:760px)
       </div>
     </section>
   </div>
+  <section class="card" style="margin-top:18px">
+    <h2>固件更新</h2>
+    <p>选择蓝牙版或 Wi-Fi 版应用固件 .bin，可互相切换。上传并校验成功后设备会重新启动，普通 OTA 会保留已保存的设置。</p>
+    <input id="firmware" type="file" accept=".bin,application/octet-stream">
+    <button id="updateFirmware" style="margin-top:10px">上传固件并更新</button>
+    <progress id="firmwareProgress" max="100" value="0" style="width:100%"></progress>
+    <div id="firmwareStatus" class="status" role="status">更新过程中请保持连接和设备供电。</div>
+  </section>
   <footer>图像量化基于 epdoptimize（Apache-2.0），使用 LAB 色彩匹配与 Floyd–Steinberg 抖动。</footer>
 </main>
 <script>
@@ -131,6 +139,42 @@ sendButton.addEventListener('click',async()=>{
   if(!frame)return;sendButton.disabled=true;message('正在上传帧数据…','busy');
   try{const response=await fetch('/api/frame',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:frame});if(!response.ok)throw Error(await response.text());message('上传完成，墨水屏正在刷新，请等待约 20 秒。','busy');poll()}
   catch(e){message('发送失败：'+e.message,'err');sendButton.disabled=false}
+});
+
+
+const firmwareInput=$('firmware'), firmwareButton=$('updateFirmware');
+function firmwareMessage(text){$('firmwareStatus').textContent=text}
+function firmwareCrc32(bytes){
+  let crc=0xffffffff;
+  for(const value of bytes){crc^=value;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0)}
+  return ((crc^0xffffffff)>>>0).toString(16).padStart(8,'0');
+}
+firmwareButton.addEventListener('click',async()=>{
+  const firmware=firmwareInput.files[0];
+  if(!firmware){firmwareMessage('请先选择固件 .bin 文件。');return}
+  if(firmware.size<288||firmware.size>0x160000){firmwareMessage('文件大小不符合本设备固件要求。');return}
+  firmwareButton.disabled=true;firmwareInput.disabled=true;sendButton.disabled=true;processButton.disabled=true;
+  try{
+    const bytes=new Uint8Array(await firmware.arrayBuffer());
+    const project=new TextDecoder().decode(bytes.slice(80,112)).split('\0')[0];
+    if(bytes[0]!==0xe9||bytes[12]!==5||bytes[13]!==0||(project!=='C3FN4_3.98_A0'&&project!=='C3FN4_3.98_A0_BLE')||bytes[32]!==0x32||bytes[33]!==0x54||bytes[34]!==0xcd||bytes[35]!==0xab)throw Error('请选择本设备蓝牙版或 Wi-Fi 版应用固件，不能使用启动程序或合并固件。');
+    const reconnect=project.endsWith('_BLE')?'请打开 Android App，扫描连接 EPD-Calendar。':'重新连接 C3FN4-EPAPER 后刷新网页。';
+    if(!confirm('更新后设备会重启。'+reconnect+'上传期间请保持供电和 Wi-Fi 连接。是否继续？')){
+      firmwareButton.disabled=false;firmwareInput.disabled=false;sendButton.disabled=!frame;processButton.disabled=false;return;
+    }
+    firmwareMessage('正在上传固件…');
+    await new Promise((resolve,reject)=>{
+      const xhr=new XMLHttpRequest();xhr.open('POST','/api/firmware');xhr.timeout=300000;
+      xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('X-Firmware-CRC32',firmwareCrc32(bytes));
+      xhr.upload.onprogress=e=>{if(e.lengthComputable){const percent=Math.floor(e.loaded*100/e.total);$('firmwareProgress').value=percent;firmwareMessage(percent<100?'正在上传固件 '+percent+'%':'上传完成，正在校验固件…')}};
+      xhr.onload=()=>{if(xhr.status!==200){reject(Error(xhr.responseText||'设备拒绝固件'));return}
+        try{const result=JSON.parse(xhr.responseText);if(!result.ok)throw Error('固件校验未成功');
+          firmwareMessage(result.reboot?'固件校验通过，设备正在重启。'+reconnect:'固件已保存，请手动重启设备。'+reconnect);resolve();
+        }catch(e){reject(e)}};
+      xhr.onerror=()=>reject(Error('连接中断，请重新连接设备后确认版本；若未提交，可重新上传。'));
+      xhr.ontimeout=()=>reject(Error('上传超时，请重新连接后重试。'));xhr.send(firmware);
+    });
+  }catch(e){firmwareMessage('更新未完成：'+e.message);firmwareButton.disabled=false;firmwareInput.disabled=false;sendButton.disabled=!frame;processButton.disabled=false}
 });
 
 async function poll(){try{const state=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());if(state.busy){setTimeout(poll,1500)}else{message('墨水屏刷新完成。','ok');sendButton.disabled=!frame}}catch{setTimeout(poll,2000)}}

@@ -1,6 +1,7 @@
 #include "bsp/bsp_display.h"
 #include "esp_log.h"
 #include "web_ui.h"
+#include "firmware_update.h"
 
 static const char *TAG = "app";
 
@@ -20,5 +21,6 @@ void app_main(void)
         }
     }
     ESP_ERROR_CHECK(web_ui_start());
+    firmware_update_confirm_boot();
     ESP_LOGI(TAG, "ready: connect to C3FN4-EPAPER and open http://192.168.4.1");
 }

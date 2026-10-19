@@ -43,3 +43,11 @@ idf.py set-target esp32c3
 idf.py build
 idf.py -p PORT flash monitor
 ```
+
+## Wireless firmware update (OTA)
+
+Firmware 2.2.0 includes a firmware upload section in the device web page. A one-time USB migration to the 4MB dual-OTA partition table is required; back up settings/images before migration. See [OTA_UPDATE.md](OTA_UPDATE.md) for setup, application bin selection, and validation limits.
+
+## 2.3 双向互刷
+
+蓝牙 App 与 Wi-Fi 网页均可上传另一版应用固件。两版共用分区和字库；旧 Wi-Fi 布局需先 USB 完整更新一次。操作与迁移条件见 [OTA_UPDATE.md](OTA_UPDATE.md)。
