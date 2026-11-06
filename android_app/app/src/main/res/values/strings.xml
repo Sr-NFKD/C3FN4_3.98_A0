@@ -1,3 +1,34 @@
 <resources>
-    <string name="app_name">墨水屏 BLE</string>
+    <string name="app_name">墨映</string>
+    <string name="brand_tagline">把喜欢的画面，留在纸上。</string>
+    <string name="theme_title">选择主题颜色</string>
+    <string name="theme_current">主题 · %1$s</string>
+    <string-array name="theme_names">
+        <item>纸白</item><item>松绿</item><item>海蓝</item><item>胭红</item>
+    </string-array>
+    <string name="offline_hint">可以先选图、调整预览；连接墨水屏后再发送。</string>
+    <string name="zoom_value">图片大小 · %1$d%%</string>
+    <string name="zoom_fit">适应屏幕</string>
+    <string name="zoom_description">图片缩放比例，25% 到 300%</string>
+    <string name="zoom_hint">100% 显示完整图片；放大后超出屏幕的部分会裁切。</string>
+    <string name="preview_status">552 × 768 · %1$d° · %2$d%% · %3$s</string>
+    <string name="zoom_crop">居中裁切</string>
+    <string name="zoom_contain">完整画面</string>
+    <string name="depth_title">颜色深浅</string>
+    <string name="depth_hint">向左调浅，向右加深。全部为 100% 且关闭反转时使用所选风格的默认算法；松手后更新预览。</string>
+    <string name="style_title">出图风格</string>
+    <string name="style_default_hint">原图 + Atkinson 抖动，默认照片模式。</string>
+    <string-array name="style_hints">
+        <item>原图 + Atkinson 抖动，默认照片模式。</item>
+        <item>高对比调色 + Atkinson 抖动，明暗更鲜明。</item>
+        <item>四色直接量化，不抖动，适合色块与图案。</item>
+        <item>灰阶 + Atkinson 四色量化，保留原算法的色调。</item>
+    </string-array>
+    <string name="depth_reset">恢复颜色深浅默认值</string>
+    <string name="red_depth">红色 · %1$d%%</string>
+    <string name="red_depth_description">红色深浅，0% 到 200%</string>
+    <string name="black_depth">黑色 · %1$d%%</string>
+    <string name="black_depth_description">黑色深浅，0% 到 200%</string>
+    <string name="yellow_depth">黄色 · %1$d%%</string>
+    <string name="yellow_depth_description">黄色深浅，0% 到 200%</string>
 </resources>

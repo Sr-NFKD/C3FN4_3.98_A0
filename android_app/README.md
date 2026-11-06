@@ -1,38 +1,46 @@
-# 墨水屏 BLE 安卓应用 2.2
+# 墨映 · Android APP 2.5
 
-适用于 Android 13 及以上，连接 **EPD-Calendar**。与设备端共同使用 panyihang/3.98Inch-ESP32C3-EPD 的公开 BLE v1 协议。
+Android 13（API 33）及以上，连接本仓库蓝牙固件 `EPD-Calendar`。本目录同步自独立的 Android 工程，包含源码、资源、Gradle wrapper 与单元测试。
 
-1. 烧录本仓库完整固件（包含新分区表与字库）。
-2. 安装 `app/build/outputs/apk/debug/app-debug.apk`。
-3. 开启蓝牙，允许“附近的设备”，扫描并连接设备。
-4. 选图 → 四色预览 → 发送 → 等待刷新完成。
-5. 清白使用全白照片上传，会替换当前照片槽。
+## 功能
 
-App 使用 Android 原生 GATT API，有响应写入，先订阅 Notify，再发送 EP 协议帧。通知支持拆包/粘包，命令响应按序号匹配。正常超时以同序号重试，设备忙则以新序号重试。图片采用设备返回的接收偏移，不把 Android 写入成功当作照片保存成功。
+- 未连接时也能选图、编辑；仅发送、清屏和 OTA 需要连接。
+- 552×768 竖向预览，转换为屏幕原生 768×552 帧；25%～300% 缩放、适应屏幕、90°旋转。
+- 鎏金、质感、色阶、水墨四种风格；反色以及红、黑、黄独立深浅调节（0%～200%）。
+- 纸白、松绿、海蓝、胭红主题和四色图标。
+- BLE 顺序传输、应答序号匹配、忙状态重试、通知拆帧、断线续传、刷新状态确认。
+- 选择应用 bin 进行蓝牙 OTA，支持配套蓝牙/Wi-Fi 固件互刷。
 
-断线后重新连接并发送同一张图，可续传（设备未重启、App 仍保留该会话）。退出 App 或更换图片后会建立新会话，必要时取消旧上传。上传完成后，我们的固件通过可选状态特征确认物理刷新；连接上游固件时没有该特征，仅报告图片已保存、设备已安排刷新。
+## 使用
 
-协议 UUID 已改变，旧版 BLE 固件不能与 App 2.2 通信，需要两端一起更新。
+1. 按根目录 README 完整烧录设备固件与字库。
+2. 安装构建后的 `app/build/outputs/apk/debug/app-debug.apk`。
+3. 开启蓝牙，允许“附近的设备”，扫描并连接 `EPD-Calendar`。
+4. 选图、调整风格与颜色、检查预览，发送并等待实际刷新完成。
+5. 清白会以全白图片替换当前照片槽；固件更新前等待当前操作完成。
 
-## 构建与检查
+手机处理图片时采用白底合成，预览颜色与发送帧编码一致。保持应用在前台并靠近设备。设备未重启、APP 保留上传会话、再次发送相同帧时可以续传；退出 APP 或更换图片会建立新会话。
+
+客户端先订阅通知，再发送 EP v1 帧。可选 Status 特征用于确认物理刷新；连接不提供此特征的上游固件时，只能确认图片保存并已安排刷新。不能与最早 `7e400001...` UUID 的旧固件混用。
+
+## 构建和检查
+
+用 Android Studio 打开本目录，安装 SDK 37，配置本机 SDK 路径与 JDK。项目使用 Gradle 9.6.0、AGP 9.4.1，daemon JVM 配置使用 JDK 25。`local.properties` 属于本机配置，不上传。
 
 ```powershell
-$env:JAVA_HOME = 'A:\Program Files\Android\Android Studio\jbr'
-$env:ANDROID_HOME = 'C:\Users\Sr_NFKD\AppData\Local\Android\Sdk'
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-10 个测试覆盖四色像素、图像打包、不同 MTU 分包、上游协议固定字节样本、CRC16/CRC32、通知流重组、设备信息与状态解析。已通过构建、单元测试、lint 错误检查；尚未安装或用本版进行实机验收。
+测试包含协议固定样本、CRC16/CRC32、最小/大 MTU 分包、通知流、设备状态、预览与打包、缩放、透明像素，以及四种风格的上游固定样本摘要。调试 APK 使用测试签名；源码不含发布签名。
 
-验证时检查：通知订阅、发图、清白、上传中断线再发同一张图、刷新期间断线重连、手机蓝牙关闭后恢复。完整协议见仓库根目录 `BLE_PROTOCOL.md`。
+## 源码与算法来源
 
+`ReinkRaster.java` 改编自 [yhl88890/qpoll-lite](https://github.com/yhl88890/qpoll-lite)，上游声明 **PolyForm Noncommercial 1.0.0**，并将算法归于墨小佳（Reink Case）。本工程保留原注释、声明和许可文本，新增 Java 包名适配、BLE 打包、预览、深浅调节及 UI 接入。未移植上游 NFC 或设备供电代码。
 
-## 固件更新（2.2）
+- [详细来源与改动](../SOURCES.md)
+- [随 APK 打包的声明](app/src/main/assets/qpoll-lite-NOTICE.txt)
+- [PolyForm 非商业许可全文](app/src/main/assets/licenses/PolyForm-Noncommercial-1.0.0.txt)
+- [设备协议](../BLE_PROTOCOL.md)
+- [OTA 与分区迁移](../OTA_UPDATE.md)
 
-连接设备并等待当前操作结束后，点击“选择固件并更新设备”，选择蓝牙版应用 bin。App 检查芯片/项目名和大小，确认后分包上传；校验成功后设备重启，需重新扫描连接。中断后固件必须从头上传，旧固件不会被未完成上传替换。首次需通过 USB 烧录支持双 OTA 分区的固件，步骤见仓库根目录 OTA_UPDATE.md。
-
-扫描恢复为服务 UUID 过滤，持续 15 秒。
-
-## App 2.3
-
-固件选择支持蓝牙版与 Wi-Fi 版应用 bin，更新前后提示目标版本的连接方式。服务 UUID 扫描过滤保持启用。支持互刷需设备先运行 2.3 固件并使用共同分区/字库。
+本 APP 的四种风格与小程序的 Floyd–Steinberg 量化不同；不保证跨客户端点阵一致，也不代表获得 Reink Case 商业授权。实机联调需另外验证扫描、四颜色、断线、刷新状态与 OTA。

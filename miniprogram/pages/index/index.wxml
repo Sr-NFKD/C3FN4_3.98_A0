@@ -1,0 +1,50 @@
+<view class="page" style="background: {{theme.background}}; color: {{theme.ink}}; --accent: {{theme.accent}}; --soft: {{theme.soft}}; --card: {{theme.card}}; --border: {{theme.border}}; --button-text: {{theme.buttonText}};">
+  <canvas type="2d" id="buffer" class="buffer" />
+  <view class="header">
+    <image class="logo" src="/assets/moying.png" mode="aspectFit" />
+    <view class="brand"><text class="title">墨映</text><text class="subtitle">把喜欢的画面，留在纸上。</text></view>
+    <button class="theme" bindtap="changeTheme">{{appearanceLabel}} ▾</button>
+  </view>
+  <view class="card">
+    <view class="section-head"><text class="section-title">你的四色画布</text><text class="badge">离线也能编辑</text></view>
+    <view class="preview-wrap">
+      <canvas type="2d" id="preview" class="preview" bindtouchstart="dragStart" catchtouchmove="dragMove" bindtouchend="dragEnd" bindtouchcancel="dragEnd" style="height: {{canvasHeight}}px;" />
+      <view wx:if="{{!hasImage}}" class="placeholder"><text class="placeholder-title">让画面，停留久一点</text><text>先选一张照片，不用连接设备</text></view>
+    </view>
+    <text class="hint image-hint">{{imageMessage}}</text>
+    <view class="row">
+      <button class="primary grow" bindtap="chooseImage" disabled="{{processing || !canvasReady}}" >{{hasImage ? '更换图片' : '选择图片'}}</button>
+      <button class="secondary" bindtap="rotate" disabled="{{!hasImage || processing}}">旋转 90°</button>
+    </view>
+    <view class="zoom-row"><text>图片大小 · {{zoom}}%</text><button class="text-button" bindtap="fit" disabled="{{!hasImage || processing}}">适应屏幕</button></view>
+    <slider min="25" max="300" step="5" value="{{zoom}}" activeColor="{{theme.accent}}" backgroundColor="{{theme.soft}}" block-color="{{theme.accent}}" block-size="22"
+      bindchanging="zoomChanging" bindchange="zoomChanged" disabled="{{!hasImage || processing}}" />
+    <text class="hint">用手指拖动画面调整位置，放大后可选择裁切区域。</text>
+    <view class="zoom-row"><text>颜色深浅</text><button class="text-button" bindtap="resetDepth" disabled="{{!hasImage || processing}}">恢复默认</button></view>
+    <view wx:for="{{depthControls}}" wx:key="key">
+      <view class="zoom-row"><text>{{item.label}} · {{depth[item.key]}}%</text><text class="hint">浅 ← → 深</text></view>
+      <slider min="0" max="200" step="1" value="{{depth[item.key]}}" activeColor="{{item.color}}" backgroundColor="{{theme.soft}}" block-color="{{item.color}}" block-size="22"
+        data-color="{{item.key}}" bindchanging="depthChanging" bindchange="depthChanged" disabled="{{!hasImage || processing}}" />
+    </view>
+    <text class="hint">100% 为原图深浅，松手后更新预览。背景太深时向左微调，开启四色抖动可保留更多层次。</text>
+    <view class="switch-row"><view><text>四色抖动</text><text class="hint">照片层次更细腻</text></view><switch checked="{{dither}}" bindchange="changeDither" color="{{theme.accent}}" disabled="{{processing}}" /></view>
+    <view class="switch-row last"><text>颜色反转</text><switch checked="{{invert}}" bindchange="changeInvert" color="{{theme.accent}}" disabled="{{processing}}" /></view>
+    <view class="swatches"><view class="swatch black"/><view class="swatch white"/><view class="swatch yellow"/><view class="swatch red"/><text>黑 · 白 · 黄 · 红</text></view>
+  </view>
+  <view class="card">
+    <view class="section-head"><text class="section-title">连接墨水屏</text><text class="badge">{{ready ? '已连接' : 'BLE 蓝牙'}}</text></view>
+    <text class="connection-message" aria-live="polite">{{message}}</text>
+    <view class="row">
+      <button class="secondary grow" bindtap="scan" disabled="{{busy}}">扫描附近设备</button>
+      <button class="secondary" bindtap="disconnect" disabled="{{!(ready || busy)}}">{{busy ? '停止 / 断开' : '断开'}}</button>
+    </view>
+    <picker wx:if="{{devices.length}}" range="{{devices}}" range-key="name" value="{{deviceIndex}}" bindchange="selectDevice" disabled="{{ready || (scanning ? false : busy)}}">
+      <view class="device-picker">{{devices[deviceIndex].name}} · {{devices[deviceIndex].deviceId}} ▾</view>
+    </picker>
+    <button wx:if="{{devices.length ? !ready : false}}" class="primary connect" bindtap="connect" disabled="{{scanning ? false : busy}}">连接选中的墨水屏</button>
+    <progress percent="{{progress}}" activeColor="{{theme.accent}}" backgroundColor="{{theme.soft}}" stroke-width="5" border-radius="6" show-info />
+    <button class="primary send" bindtap="send" disabled="{{!ready || !frameReady || processing}}">{{ready ? '发送到墨水屏' : '连接后即可发送'}}</button>
+    <button class="text-button clear" bindtap="clear" disabled="{{!ready || processing}}">清屏为白色</button>
+  </view>
+  <view class="footer"><view>真机微信体验蓝牙功能 · 发送时请保持小程序在前台</view><view>传输到 100% 后，仍需等待屏幕完成刷新</view></view>
+</view>

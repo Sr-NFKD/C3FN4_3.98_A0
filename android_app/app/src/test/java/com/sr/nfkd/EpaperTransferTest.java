@@ -9,6 +9,45 @@ import java.util.zip.CRC32;
 import static org.junit.Assert.*;
 
 public class EpaperTransferTest {
+    @Test public void inkDepthControlsPreserveEndpointsAndPreviewMatchesFrame() {
+        int[] source = new int[32 * 16];
+        Random random = new Random(42);
+        for (int i = 0; i < source.length; i++) source[i] = 0xff000000 | random.nextInt(0x1000000);
+        for (boolean invert : new boolean[] {false, true}) {
+            assertArrayEquals(FrameCodec.encode(source.clone(), 32, 16, true, invert),
+                    FrameCodec.encode(source.clone(), 32, 16, true, invert, 100, 100, 100));
+        }
+        int[] codes = {3, 0, 2}; // red, black, yellow
+        for (int ink = 0; ink < codes.length; ink++) {
+            for (boolean dither : new boolean[] {false, true}) {
+                int previous = -1;
+                for (int amount : new int[] {0, 50, 100, 200}) {
+                    int[] depths = {100, 100, 100}; depths[ink] = amount;
+                    int[] pixels = new int[512]; Arrays.fill(pixels, FrameCodec.COLORS[codes[ink]]);
+                    byte[] frame = FrameCodec.encode(pixels, 32, 16, dither, false, depths[0], depths[1], depths[2]);
+                    int count = 0;
+                    for (int i = 0; i < pixels.length; i++) {
+                        int code = (frame[i / 4] >> (6 - 2 * (i % 4))) & 3;
+                        assertEquals(FrameCodec.COLORS[code], pixels[i]);
+                        // The upstream dark red/yellow palette can mix other inks at intermediate depths.
+                        if (code == codes[ink]) count++;
+                    }
+                    assertTrue(count >= previous); previous = count;
+                    if (amount == 0) assertEquals(0, count);
+                    if (amount >= 100) assertEquals(512, count);
+                    if (amount == 50 && dither) assertTrue(count > 0 && count < 512);
+                }
+                int[] depths = {100, 100, 100}; depths[(ink + 1) % 3] = 0;
+                int[] pixels = new int[512]; Arrays.fill(pixels, FrameCodec.COLORS[codes[ink]]);
+                FrameCodec.encode(pixels, 32, 16, dither, false, depths[0], depths[1], depths[2]);
+                for (int pixel : pixels) assertEquals(FrameCodec.COLORS[codes[ink]], pixel);
+            }
+        }
+        assertThrows(IllegalArgumentException.class,
+                () -> FrameCodec.encode(source, 32, 16, true, false, -1, 100, 100));
+        assertThrows(IllegalArgumentException.class,
+                () -> FrameCodec.encode(source, 32, 16, true, false, 100, 201, 100));
+    }
     @Test public void firmwareRejectsWrongChipProjectAndContainer() {
         byte[] firmware = new byte[1024];
         firmware[0] = (byte)0xe9; firmware[12] = 5;
@@ -59,7 +98,7 @@ public class EpaperTransferTest {
         assertEquals(105984, frame.length);
         for (byte value : frame) assertEquals(0x55, value & 255);
     }
-    @Test public void serpentineDitheringPacksTheSamePixelsAsPreview() {
+    @Test public void atkinsonDitheringPacksTheSamePixelsAsPreview() {
         int[] pixels = new int[8 * 8];
         Random random = new Random(42);
         for (int i = 0; i < pixels.length; i++) pixels[i] = 0xff000000 | random.nextInt(0x1000000);

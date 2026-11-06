@@ -1,0 +1,13 @@
+Image processing: ReinkRaster.java adapted from yhl88890/qpoll-lite.
+https://github.com/yhl88890/qpoll-lite
+Source blob: 0566be301c9b14121c192c59627379c556c0f737
+https://github.com/yhl88890/qpoll-lite/blob/main/src/com/qpoll/lite/ReinkRaster.java
+
+The upstream README declares PolyForm Noncommercial 1.0.0 and credits
+Reink Case for the colour-processing algorithm. Its original source comments
+have been preserved. This build is supplied for personal, noncommercial testing.
+Changes: Java package changed to com.sr.nfkd; existing BLE frame packing,
+preview, ink-depth controls and Android style selection integrated separately.
+No upstream NFC or device-power code is included.
+
+License text: licenses/PolyForm-Noncommercial-1.0.0.txt

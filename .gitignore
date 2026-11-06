@@ -78,3 +78,13 @@ Desktop.ini
 *.workspace # General workspace files, can be from various tools
 *.suo       # Visual Studio Solution User Options
 *.sln.docstates # Visual Studio
+
+# Local build variants, release bundles and private configuration
+/build_*/
+/artifacts/
+**/local.properties
+**/project.private.config.json
+**/node_modules/
+*.apk
+*.jks
+*.keystore

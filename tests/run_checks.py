@@ -16,6 +16,11 @@ with tempfile.TemporaryDirectory(prefix='epd-protocol-check-') as directory:
     # Compile the actual startup paths with a stub panel that can fail.
     entry = (root / 'main/app_main.c').read_text(encoding='utf-8-sig')
     worker = (source / 'ble_epaper.c').read_text(encoding='utf-8-sig')
+    startup = worker[worker.index('esp_err_t ble_epaper_start('):worker.index('void ble_epaper_read_status(')]
+    assert 'submit_refresh(' not in startup, 'Startup must not enqueue a saved-photo refresh'
+    submit = worker[worker.index('static bool submit_refresh(uint32_t reason, bool force)\n{'):]
+    submit = submit[:submit.index('\n}')] + '\n}\n'
+    pathlib.Path(directory, 'submit_refresh.inc').write_text(submit, encoding='utf-8')
     worker = worker[worker.index('static void refresh_task(void *arg)\n{'):]
     worker = worker[:worker.index('    refresh_queue_item_t item;')] + '}\n'
     pathlib.Path(directory, 'app_entry.inc').write_text(entry[entry.index('void app_main(void)'):], encoding='utf-8')

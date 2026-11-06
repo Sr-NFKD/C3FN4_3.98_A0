@@ -1,39 +1,67 @@
-# ESP32-C3 四色墨水屏固件（EPD-Calendar 协议）
+# 墨映 · ESP32-C3 四色墨水屏（蓝牙版）
 
-本工程兼容 [panyihang/3.98Inch-ESP32C3-EPD](https://github.com/panyihang/3.98Inch-ESP32C3-EPD) 提交 `779eab2` 的公开 BLE v1 协议。设备名为 **EPD-Calendar**，使用相同服务 UUID、控制/图片/通知特征、EP 帧封装和全部 14 条命令。我们的安卓 App 同步采用此协议。尚未使用对方小程序进行实机联调，不能把协议检查通过等同于小程序验收完成。
+本分支集中保存 **ESP32-C3 蓝牙固件、Android APP 2.5 和微信小程序**，适配 SE0398NZ07-FNG-A0（768×552，黑/白/黄/红）。设备广播名为 `EPD-Calendar`，采用 EP BLE v1 协议。
 
-## 功能
+- 当前蓝牙源码：[BLE 分支](https://github.com/Sr-NFKD/C3FN4_3.98_A0/tree/BLE)。
+- Wi-Fi 固件：[wifi 分支](https://github.com/Sr-NFKD/C3FN4_3.98_A0/tree/wifi)。仓库默认页面目前显示 Wi-Fi 分支，查看本版请切到 BLE。
+- **源码、算法、第三方许可和改动说明：[SOURCES.md](SOURCES.md)**。APP 内的 `ReinkRaster` 改编自声明非商业许可的上游；本仓库不作统一 MIT/Apache 授权。
 
-- 手机处理 768×552 四色 2bpp 图片，BLE 分包传输、命令 CRC16、整图 CRC32。
-- 四个照片槽，每槽双 bank；Flash 回读校验成功后才提交，失败保留旧照片。
-- BLE 断线后同一次开机期间可以续传；设备重启后保留已提交照片。
-- 日历、相框、日历+相框、状态页；旋转、时区、位置、今日计划持久化。
-- BLE 配网，设备 Wi-Fi 联网校时、获取天气。无需手机连接设备热点。
-- 保留本板已验证的 BSP 屏幕指令与物理行映射。条带绘制避免常驻 106KB 帧缓冲。
-- 可选的只读状态特征供我们的 App 确认实际刷新完成，不改变小程序依赖的特征。
+## 目录
 
-蓝牙启动后，由独立屏幕任务按 `APP_POWER_ON_CLEAR_WHITE_COUNT` 执行开机清白（当前为 1 次，设为 0 可保留原画面）；清白超时或失败不会阻塞蓝牙广播。相框模式有已保存照片时随后重新显示。相框显示原图，不叠加槽位标签或边框。默认模式仍为上游日历模式，小程序可设置为相框，我们的 App 发图时会选择相框模式。
+| 路径 | 内容 |
+|---|---|
+| `main/`、`components/ble_epaper/` | 固件入口、BLE 服务、照片存储、日历、网络与刷新管理 |
+| `components/bsp/` | ESP32-C3 板级驱动、屏幕指令和物理行映射 |
+| `components/firmware_update/` | ESP-IDF 原生双分区 OTA |
+| `assets/fonts.bin` | 上游字库，完整烧录时写入 fonts 分区 |
+| [`android_app/`](android_app/README.md) | 墨映 Android 2.5 完整 Gradle 工程、四种图像风格及测试 |
+| [`miniprogram/`](miniprogram/README.md) | 微信小程序完整工程、图片编辑、BLE 传图及测试 |
+| `tests/` | 固件协议、Flash、OTA 和启动行为的主机测试 |
+| [`BLE_PROTOCOL.md`](BLE_PROTOCOL.md) | UUID、EP 帧、图片编码和命令定义 |
+| [`OTA_UPDATE.md`](OTA_UPDATE.md) | 首次分区迁移和蓝牙/Wi-Fi 双向互刷 |
+| `components/web_ui/` | 从 Wi-Fi 工程保留的网页组件；当前 BLE 入口不构建该组件 |
 
-## 编译与烧录
+## 功能与使用
 
-使用 ESP-IDF **5.5.4**，无需升级到 IDF 6 或安装 esp-nimble-cpp。NimBLE 服务使用 IDF 原生 C 接口。
+手机本地处理图片，生成 105984 字节的四色 2bpp 帧，通过 BLE 分包传输。固件提供四个照片槽、双 bank 保存、回读校验、同次开机期间断线续传，以及日历、相框、日历+相框、状态页。支持 BLE 配网，联网校时与天气。APP 提供固件 OTA，小程序当前不提供 OTA。
+
+上电默认保持墨水屏原有画面，不清白、不自动重刷照片。相框模式下网络校时、天气和定时任务也不触发照片重刷；主动传图、切换模式、刷新仍正常工作。相框照片不叠加边框或槽位标签。
+
+1. 首次通过 USB 完整烧录固件和字库。
+2. 安装自行构建的 APP，或用微信开发者工具打开 `miniprogram/` 并配置自己的 AppID。
+3. 手机开启蓝牙，允许“附近的设备”或微信蓝牙权限，扫描并连接 `EPD-Calendar`。设备仅允许一个 BLE 连接，切换客户端前先断开。
+4. 选图、调整、查看四色预览，点击发送并等待“刷新完成”。100% 传输进度不等于屏幕已刷新。
+5. 清屏通过全白照片上传实现，会覆盖当前照片槽。续传需要设备未重启、客户端保留当前会话且再次发送同一帧。
+
+APP 和小程序使用不同图像算法，输出的点阵可能不同；各自预览均使用实际发送帧。照片在手机本地处理，通过 BLE 发给设备。
+
+## 固件编译与烧录
+
+使用 **ESP-IDF 5.5.4**，目标 **ESP32-C3 / 4MB Flash**。在已配置好的 ESP-IDF 终端，从仓库根目录执行：
 
 ```powershell
+idf.py -B build_ble set-target esp32c3
 idf.py -B build_ble build
 idf.py -B build_ble -p COM18 flash monitor
 ```
 
-COM18 换为实际端口。本版使用 **4MB Flash** 和 `partitions.csv`，首次迁移必须完整烧录 bootloader、分区表、应用及字库；不要仅烧录应用 bin。正常 `idf.py flash` 已包含字库 `assets/fonts.bin`，地址 0x3a0000。原 BLE 版本没有保存照片；迁移后新增照片分区，后续不要再用旧分区表烧录。
+将 COM18 换成实际端口。输出应用为 `build_ble/C3FN4_3.98_A0_BLE.bin`。工程使用 IDF 原生 NimBLE C 接口，无需安装 esp-nimble-cpp。
 
-无线固件更新已加入：蓝牙版使用 App 2.2 的“选择固件并更新设备”，Wi-Fi 版使用网页的“固件更新”。首次必须迁移为双 OTA 分区，具体步骤及数据迁移说明见 [OTA_UPDATE.md](OTA_UPDATE.md)。
+**首次迁移必须写入 bootloader、分区表、OTA 初始数据、应用和字库，不能只烧应用 bin。** `idf.py flash` 已包含 `assets/fonts.bin`，字库地址为 `0x3a0000`，应用地址为 `0x10000`。旧版分区迁移可能清除设置和照片，操作前阅读 [OTA_UPDATE.md](OTA_UPDATE.md)。
 
-输出固件：`build_ble/C3FN4_3.98_A0_BLE.bin`，应用地址 0x10000。完整烧录参数见 `build_ble/flash_args`。本次 OTA 版本尚未自动烧录设备。
+本机路径和串口可在自己的开发环境配置；以以上命令为准。源码不包含构建缓存、APK、打包固件或本机 `sdkconfig`，配置从 `sdkconfig.defaults` 生成。
 
-## 安卓 App
+## APP 与小程序构建
 
-源码：`android_app/`；APK：`android_app/app/build/outputs/apk/debug/app-debug.apk`。
+Android：用 Android Studio 打开 `android_app/`，安装项目要求的 Android SDK 37，配置本机 SDK 与 JDK；Gradle wrapper 为 9.6.0、AGP 为 9.4.1，项目 daemon 配置使用 JDK 25。最低 Android 13（API 33）。在该目录执行：
 
-Android 13 及以上，允许“附近的设备”权限后扫描 **EPD-Calendar**。发图和清白都使用上游照片上传命令。断线后重新连接并发送同一张图片，可在设备未重启、App 仍保留该上传会话时恢复进度。App 退出后重新启动会创建新会话。
+```powershell
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+```
+
+APK 输出到 `android_app/app/build/outputs/apk/debug/app-debug.apk`，采用测试签名。更多操作见 [APP 说明](android_app/README.md)。
+
+微信：在开发者工具打开 `miniprogram/`，将占位 `touristappid` 换为自己的 AppID，编译、预览后在手机测试 BLE。无需 npm 或后端服务。公开源码不含 `project.private.config.json`。详见 [小程序说明](miniprogram/README.md)。
 
 ## 接线
 
@@ -46,23 +74,21 @@ Android 13 及以上，允许“附近的设备”权限后扫描 **EPD-Calendar
 | D/C | GPIO6 |
 | RST | GPIO7 |
 
-## 验证
-
-- ESP-IDF 构建通过，4MB 分区范围及应用大小检查通过。
-- APK 构建与协议/图像单元测试通过，Android lint 无错误（有现有样式、文本等警告）。
-- `tests/run_checks.py` 编译并运行固件 C 源码，检查所有命令、CRC、拆帧、重试去重、参数校验、续传。
-- `tests/test_flash.c` 在模拟 NOR Flash 上运行真实 ESP 存储路径，检查乱序/重复上传、CRC、取消、提交失败、重启选择有效 bank。
+## 检查与实机范围
 
 ```powershell
-python tests/run_checks.py --compiler <gcc、clang 或 zig.exe 的路径>
+# 在仓库根目录，编译器可使用 GCC、Clang 或 Zig
+python tests/run_checks.py --compiler <编译器完整路径>
+node --test miniprogram/tests/checks.test.js
+# Android 检查见上面的 Gradle 命令
 ```
 
-还需上板验证：小程序扫描与订阅、四色传图、断线续传、重启显示、配网与天气、刷新期间控制命令和长时间运行。详细协议见 `BLE_PROTOCOL.md`。
+主机测试覆盖命令、CRC、通知拆帧、重试去重、参数、续传、模拟 NOR Flash 提交、OTA 和启动不重刷。Android 另有图像风格固定样本、预览打包与缩放测试，小程序有模拟 BLE 会话测试。自动测试和编译不能替代手机/实体屏幕验收；仍需验证颜色方向、手机微信 BLE、断线续传、重启保图、配网天气及实际 OTA。
 
-## 来源
+### 本次整理验证（2026-11-06）
 
-`components/ble_epaper/` 下协议、命令、存储、UI、网络和刷新模块改编自上述上游提交；本工程提供 IDF 5.5 原生 GATT 接入、BSP 适配、刷新状态扩展及安卓客户端。字库 `assets/fonts.bin` 同样来自该提交。
-
-## 2.3 双向互刷
-
-蓝牙 App 与 Wi-Fi 网页均可上传另一版应用固件。两版共用分区和字库；旧 Wi-Fi 布局需先 USB 完整更新一次。操作与迁移条件见 [OTA_UPDATE.md](OTA_UPDATE.md)。
+- ESP-IDF 5.5.4：现有 `build_ble` 增量构建和分区大小检查通过，应用为 `0x1320c0` 字节，OTA 应用分区剩余 13%。
+- 固件主机检查：Startup、OTA、Protocol、Flash 四组通过（Zig C 编译器）。
+- Android：`assembleDebug`、`testDebugUnitTest`、`lintDebug` 全部通过；16 项单元测试，lint 0 错误、46 条警告。
+- 小程序：Node 原生测试 9 项通过。
+- 发布内容：文档本地链接检查通过，小程序 AppID 使用占位值，不包含私有配置与构建输出。本次没有烧录设备或执行手机/屏幕实机验收。

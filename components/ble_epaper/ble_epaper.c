@@ -167,14 +167,7 @@ esp_err_t ble_epaper_start(unsigned startup_clear_count)
         xTaskCreate(ntp_monitor_task, "ntp_monitor", 3072, NULL, 3, NULL) != pdPASS ||
         xTaskCreate(ble_command_task, "ble_commands", 6144, NULL, 4, NULL) != pdPASS)
         return ESP_ERR_NO_MEM;
-    /* Keep the existing panel image at boot, except when a saved photo exists. */
-    photo_store_info_t saved;
-    size_t length;
-    if (s_app_state.config.home_mode == NVS_STORE_MODE_PHOTO &&
-        photo_store_get(s_app_state.config.current_photo_slot, &saved, NULL, 0,
-                        &length) == ESP_ERR_INVALID_SIZE) {
-        submit_refresh(REFRESH_REASON_BOOT, true);
-    }
+    /* E-paper retains its image without power; wait for an explicit display request. */
     ESP_LOGI(TAG, "EPD-Calendar ready; heap=%u bytes", (unsigned)esp_get_free_heap_size());
     return ESP_OK;
 }
@@ -202,6 +195,12 @@ static bool submit_refresh(uint32_t reason, bool force)
         .requested_ms = (uint64_t)(esp_timer_get_time() / 1000),
     };
     xSemaphoreTake(s_config_mutex, portMAX_DELAY);
+    const uint32_t automatic = REFRESH_REASON_BOOT | REFRESH_REASON_AUTO_TIMER |
+                               REFRESH_REASON_NTP_SYNC | REFRESH_REASON_WEATHER;
+    if (s_app_state.config.home_mode == NVS_STORE_MODE_PHOTO && !(reason & ~automatic)) {
+        xSemaphoreGive(s_config_mutex);
+        return true; /* Background updates do not change a saved photo. */
+    }
     bool queued = refresh_queue_submit(s_refresh_queue, &item);
     if (queued) { ++s_refresh_requested; s_display_error = 0; }
     xSemaphoreGive(s_config_mutex);

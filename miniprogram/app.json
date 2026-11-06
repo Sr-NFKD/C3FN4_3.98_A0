@@ -1,0 +1,18 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTextStyle": "@navText",
+    "navigationBarTitleText": "墨映",
+    "navigationBarBackgroundColor": "@pageBackground",
+    "backgroundColor": "@pageBackground"
+  },
+  "permission": {
+    "scope.bluetooth": {"desc": "用于连接你的四色墨水屏并发送图片"}
+  },
+  "darkmode": true,
+  "themeLocation": "theme.json",
+  "style": "v2",
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
